@@ -1,7 +1,240 @@
 ﻿@page "/"
+@using BarcodeScanner.Entities
+@using System.Text
+@using Newtonsoft.Json;
+@using System.Web
+@using Newtonsoft.Json.Linq
+@* @rendermode InteractiveServer *@
 
-<PageTitle>Index</PageTitle>
+<PageTitle>Home</PageTitle>
 
-<h1>Hello, world!</h1>
+<div>
+    <Label>Item:</Label>
+    <input type="text" @ref="Input" @bind-value="@ItemNo" @bind-value:event="oninput" @onkeyup="EnterItem" @onfocusout="EnterItem" />
+    <br />
 
-Welcome to your new app.
+    <Label>Description:</Label> @ItemDescription
+    <br />
+
+    <Label>Quantity:</Label>
+    <input type="number" @bind-value=@Quantity />
+    <br />
+
+    <button class="btn btn-primary" @onclick="SendToBC">Send</button>
+</div>
+
+
+@code {
+
+    public ElementReference Input;
+    public string BearerToken { get; set; }
+    public string WorksheetTemplate { get; set; }
+    public string JournalBatchName { get; set; }
+    public string ItemNo { get; set; }
+    public string ItemDescription { get; set; }
+    public string TenantId { get; set; }
+    public string BCEnvironment { get; set; }
+    public decimal Quantity { get; set; }
+    public Boolean first;
+
+    protected override async void OnInitialized()
+    {
+        base.OnInitialized();
+        TenantId = "a4346625-ecc9-4a10-bb76-26184a0e862b";
+        BCEnvironment = "Sandbox_Build";
+
+        await GetAccesToken(TenantId);
+
+        await GetBarcodeSetup(TenantId, BCEnvironment);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        //  await _jsRuntime.InvokeVoidAsync("BlazorFocusElement", Input);
+        if (!first)
+        {
+            await Input.FocusAsync();
+            first = true;
+        }
+    }
+    public void test()
+    {
+        Console.WriteLine("hhihihi");
+    }
+    public async Task GetAccesToken(string TenantId)
+    {
+        string ClientId = "be8291f9-95d4-49ae-8e20-ea1f2a24c4f7";
+        string ClientSecret = "NqI8Q~rtcPY.zfvXHZbL_B.oLYaqXFlLV2y4kc-Y";
+
+        string URL = "https://login.microsoftonline.com/" + TenantId + "/oauth2/v2.0/token";
+
+        HttpClient client = new HttpClient();
+        var content = new StringContent("grant_type=client_credentials" +
+        "&scope=https://api.businesscentral.dynamics.com/.default" +
+        "&client_id=" + HttpUtility.UrlEncode(ClientId) +
+        "&client_secret=" + HttpUtility.UrlEncode(ClientSecret));
+        content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/x-www-form-urlencoded");
+        try
+        {
+            var response = await client.PostAsync(URL, content);
+            if (response.IsSuccessStatusCode)
+            {
+                JObject Result = JObject.Parse(await response.Content.ReadAsStringAsync());
+                BearerToken = Result["access_token"].ToString();
+                // await PostToBC(BearerToken, TenantId, BCEnvironment, log, requestBodyUrbantz);
+            }
+        }
+        catch (Exception ex)
+        {
+            
+            Console.WriteLine(ex.Message); ;
+        }
+        
+    }
+
+    public async Task EnterItem()
+    {
+        await GetItemDescription(TenantId, BCEnvironment);
+        await GetItemNo(TenantId, BCEnvironment);
+        this.StateHasChanged();
+    }
+    public async Task GetItemDescription(string TenantId, string BCEnvironment)
+    {
+        // string url = $"https://api.businesscentral.dynamics.com/v2.0/" + TenantId + "/" + BCEnvironment + "/api/conxion/data/v2.0/companies(29df27ef-0c5c-ee11-8df4-6045bde9cb74)/barcodesetup";
+        string url = $"https://api.businesscentral.dynamics.com/v2.0/" + TenantId + "/" + BCEnvironment + "/ODataV4/BarcodeConnector_GetItemReferenceItemDescription?company=31153c50-5277-ee11-817c-6045bdacd85f";
+
+        try
+        {
+            HttpClient client = new HttpClient();
+            client.DefaultRequestHeaders.Add("Authorization", "Bearer " + BearerToken);
+
+            string json = JsonConvert.SerializeObject(new
+            {
+                itemRefNo = ItemNo,
+            });
+
+            var data = new StringContent(json, Encoding.UTF8, "application/json");
+            var result = await client.PostAsync(url, data);
+            if (result.IsSuccessStatusCode)
+            {
+                Console.WriteLine(await result.Content.ReadAsStringAsync());
+                JObject Result = JObject.Parse(await result.Content.ReadAsStringAsync());
+                ItemDescription = Result["value"].ToString();
+            }
+            else
+            {
+                Console.WriteLine(result.StatusCode.ToString());
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error {ex.Message}");
+        }
+    }
+    public async Task GetItemNo(string TenantId, string BCEnvironment)
+    {
+        // string url = $"https://api.businesscentral.dynamics.com/v2.0/" + TenantId + "/" + BCEnvironment + "/api/conxion/data/v2.0/companies(29df27ef-0c5c-ee11-8df4-6045bde9cb74)/barcodesetup";
+        string url = $"https://api.businesscentral.dynamics.com/v2.0/" + TenantId + "/" + BCEnvironment + "/ODataV4/BarcodeConnector_GetItemReferenceItemNo?company=29df27ef-0c5c-ee11-8df4-6045bde9cb74";
+
+        try
+        {
+            HttpClient client = new HttpClient();
+            client.DefaultRequestHeaders.Add("Authorization", "Bearer " + BearerToken);
+
+            string json = JsonConvert.SerializeObject(new
+            {
+                itemRefNo = ItemNo,
+            });
+
+            var data = new StringContent(json, Encoding.UTF8, "application/json");
+            var result = await client.PostAsync(url, data);
+            if (result.IsSuccessStatusCode)
+            {
+                Console.WriteLine(await result.Content.ReadAsStringAsync());
+                JObject Result = JObject.Parse(await result.Content.ReadAsStringAsync());
+                ItemNo = Result["value"].ToString();
+            }
+            else
+            {
+                Console.WriteLine(result.StatusCode.ToString());
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error {ex.Message}");
+        }
+    }
+
+    public async Task GetBarcodeSetup(string TenantId, string BCEnvironment)
+    {
+        string url = $"https://api.businesscentral.dynamics.com/v2.0/" + TenantId + "/" + BCEnvironment + "/api/conxion/data/v2.0/companies(29df27ef-0c5c-ee11-8df4-6045bde9cb74)/barcodesetup";
+
+        try
+        {
+            HttpClient client = new HttpClient();
+            client.DefaultRequestHeaders.Add("Authorization", "Bearer " + BearerToken);
+
+            // var data = new StringContent(json, Encoding.UTF8, "application/json");
+            var result = await client.GetAsync(url);
+            if (result.IsSuccessStatusCode)
+            {
+                string response = await result.Content.ReadAsStringAsync();
+                Console.WriteLine(await result.Content.ReadAsStringAsync());
+                BarcodeSetupResponse barcodeSetupResponse = JsonConvert.DeserializeObject<BarcodeSetupResponse>(response);
+                WorksheetTemplate = barcodeSetupResponse.value.FirstOrDefault().worksheetTemplateName;
+                JournalBatchName = barcodeSetupResponse.value.FirstOrDefault().journalBatchName;
+            }
+            else
+            {
+                Console.WriteLine(result.StatusCode.ToString());
+            }
+
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error {ex.Message}");
+        }
+    }
+    public async Task SendToBC()
+    {
+        ReqLine reqLine = new ReqLine();
+
+        reqLine.worksheetTemplateName = WorksheetTemplate;
+        reqLine.journalBatchName = JournalBatchName;
+        reqLine.Type = "Item";
+        reqLine.number = ItemNo;
+        reqLine.quantity = Quantity;
+
+
+        string url = $"https://api.businesscentral.dynamics.com/v2.0/a4346625-ecc9-4a10-bb76-26184a0e862b/Sandbox_Demo/api/conxion/data/v2.0/companies(29df27ef-0c5c-ee11-8df4-6045bde9cb74)/requisitionLines";
+
+        try
+        {
+            HttpClient client = new HttpClient();
+            client.DefaultRequestHeaders.Add("Authorization", "Bearer " + BearerToken);
+
+            string json = JsonConvert.SerializeObject(reqLine);
+
+            var data = new StringContent(json, Encoding.UTF8, "application/json");
+            var result = await client.PostAsync(url, data);
+            if (result.IsSuccessStatusCode)
+            {
+                Console.WriteLine(await result.Content.ReadAsStringAsync());
+            }
+            else
+            {
+                Console.WriteLine(result.StatusCode.ToString());
+            }
+
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error {ex.Message}");
+        }
+
+        ItemNo = "";
+        ItemDescription = "";
+        Quantity = 0;
+        await Input.FocusAsync();
+    }
+}
